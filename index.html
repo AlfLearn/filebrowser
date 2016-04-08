@@ -1,0 +1,176 @@
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta charset="utf-8">
+	<title> File browser test </title>
+	
+<style>
+
+p.FileLink {
+margin:0px;
+padding:2px;
+cursor: pointer;
+text-decoration:underline;
+}
+
+span.FileLink {
+margin:4px;
+padding:2px;
+background-color:yellow;
+cursor:pointer;
+text-decoration:underline;
+}
+
+div.FilePanel {
+margin:8px;
+padding:4px;
+border-color:blue;
+border-style: solid;
+border-width:1px;
+width:48%;
+float:left;
+}
+
+</style>
+
+<script>
+
+	var apihost = "http://alfavika.ru:10009"; // место, где хостится наш node и готов отвечать на наши запросы по его api
+
+	// "полифил" для коварного IE
+	function getXhrObject(){
+		if(typeof XMLHttpRequest === 'undefined'){
+			XMLHttpRequest = function() {
+				try { return new window.ActiveXObject( "Microsoft.XMLHTTP" ); }
+				catch(e) {};
+			};
+		} else
+		return new XMLHttpRequest(); //хотя всем соверменным браузерам должно быть достаточно этого
+	};
+
+	function getQuery(url, callback) {
+		var xhr = getXhrObject();
+		xhr.open('GET', url, true);
+		xhr.onreadystatechange = function() { 
+			if(xhr.readyState == 4 && xhr.status == 200) callback(xhr.responseText);
+			//else callback("");// мне нравится считать ошибкой пустой ответ
+		}
+		xhr.send();
+	};
+	
+	function postQuery(url, postObj, callback) {
+	
+		var xhr = new XMLHttpRequest();
+		xhr.open("POST", url, true)
+		//xhr.setRequestHeader('Content-Type', 'application/json; charset=utf-8');
+		xhr.onreadystatechange = function() { 
+			if(xhr.readyState == 4 && xhr.status == 200) callback(xhr.responseText);
+			//else callback("");// мне нравится считать ошибкой пустой ответ
+		}
+		xhr.send(JSON.stringify(postObj));
+	};
+	
+	var lastResponse = null; // здесь хранится последний удачный ответ
+	
+	function getFileListFor(path)
+	{
+		getQuery(apihost+path, function(rsp){ 
+			
+			if(rsp=="") {
+				alert("А есть ли сервер?"); //bdiv.innerHTML = "А есть ли сервер?"; 
+				return;
+			};
+			
+			var answ = JSON.parse(rsp);
+			if(answ.err) alert(answ.err) //bdiv.innerHTML = err; 
+			else
+			{	lastResponse = answ;
+			
+				var str = "";
+				var path1 = path;
+				if(answ.path)
+				{	path1 = answ.path;
+					 //str+= "<h3>Ресурс:" + answ.path + "</h3>"; // решил сделать чуть круче
+					str+="<h2>Ресурс: ";
+					str+="<span class='FileLink' data-fl='/'> Корневой каталог </span> ";
+					var rpath = "";
+					var sp = path1.split('/');
+					for(var i=0; i<sp.length; i++)
+					{	rpath = rpath + sp[i] +'/';
+						if(sp[i]!="")
+						str+=" => <span class='FileLink' data-fl='" + rpath + "'> "+ sp[i] +"</span>";
+					};
+					str+="</h2>";
+				};
+				 
+				str+="<h3>Папки:</h3>";
+				if(answ.dirlist && (answ.dirlist.length>0))
+				for(var i=0; i<answ.dirlist.length; i++)
+				{
+					str+="<p class='FileLink' data-fl='" + path1 + answ.dirlist[i] + "'>"+answ.dirlist[i]+"</p>";
+				};
+				str+="<h3>Файлы:</h3>"
+				if(answ.filelist && (answ.filelist.length>0))
+				for(var i=0; i<answ.filelist.length; i++)
+				{
+					str+="<p class='FileLink' data-fl='" + path1 + answ.filelist[i] + "'>"+answ.filelist[i]+"</p>";
+				};
+				
+				var bdiv = document.getElementById("browser");
+				bdiv.innerHTML = str;
+				
+				var cdiv = document.getElementById("comments");
+				str = "<h3>Комментарии:</h3>";
+				if(answ.comments)
+				for(var i=0; i<answ.comments.length; i++)
+				{	var com = answ.comments[i];
+					str+= "<p> " + com.date + ": " + com.text + "</p>";
+				}
+				cdiv.innerHTML = str;
+			}
+		});
+	}
+	
+	
+	window.onload = function() {
+		document.body.addEventListener( "click" , function(e) {
+			if(e.target.className=='FileLink')
+			{
+				//getFileListFor(e.target.innerHTML);
+				getFileListFor(e.target.dataset.fl);
+			}
+		});
+		
+		document.all.ButtonSend.onclick = function() {
+			var rq = {
+				path:lastResponse.path,
+				date: (new Date()).toLocaleString(),
+				text: document.all.texttosend.value
+			}
+			postQuery(apihost+"/addcomment", rq, function() { getFileListFor(lastResponse.path) } );
+		};
+	
+		getFileListFor(""); // сразу покажем корневой каталог
+	};
+
+</script>
+
+</head>
+
+<body>
+
+<div style="background-color:lightgray;" > Некое подобие файлового браузера </div>
+
+<div id="browser" class="FilePanel"  >
+	Здесь будут папки и файлы
+</div>
+
+<div id="comments" class="FilePanel" >
+	Комментарии
+</div>
+
+<div> 
+	<TEXTAREA id="texttosend" ROWS=4 wrap="soft"> Здесь можно написать свой комментарий </TEXTAREA>
+	<p><input type="button" name="ButtonSend" id="ButtonSend" value="Отправить комментарий"> </p>
+</div>
+
+</body>
